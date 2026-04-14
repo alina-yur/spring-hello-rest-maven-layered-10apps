@@ -1,0 +1,15 @@
+# base layer config that contains JDK modules used by Spring
+base-layer.nil
+digest-ignore
+module=java.base
+module=java.desktop
+module=java.net.http
+module=java.sql
+module=jdk.unsupported
+# Minimal Jackson configuration slice promoted into the base layer.
+package=org.springframework.boot.jackson.autoconfigure
+package=tools.jackson.databind.cfg
+# Promote the first late-discovered management package without restoring the full module.
+package=javax.management.modelmbean
+# Reflection array helpers now become reachable in the app layer unless pinned here.
+package=java.lang.reflect

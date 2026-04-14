@@ -1,0 +1,11 @@
+[
+  {
+    "name": "org.eclipse.jetty.ee11.servlet.security.ConstraintSecurityHandler",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,40 @@
+# Maven and general build output
+target/
+build/
+out/
+
+# GraalVM / Native Image diagnostics
+*.nil
+*.nib
+*.hprof
+hs_err_pid*
+replay_pid*
+svm_err_*.md
+
+# Local runtime noise
+*.log
+*.pid
+
+# IDEs and editors
+.idea/
+.vscode/
+.settings/
+.apt_generated/
+.classpath
+.factorypath
+.project
+.springBeans
+.sts4-cache/
+*.iml
+*.ipr
+*.iws
+*~
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven wrapper local timing file
+.mvn/timing.properties
