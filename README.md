@@ -1,307 +1,136 @@
-# Spring Layered Native Image Demo
+# Spring Native Layers Demo
 
-This example shows how to build a simple [Spring](https://spring.io/) REST application using the [GraalVM Native Image Layers](https://github.com/oracle/graal/blob/master/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/imagelayer/NativeImageLayers.md) feature.
+This repository demonstrates a layered GraalVM native build for Spring Boot. A shared native base layer is built once in `base-layer/`, then reused by 10 small Spring application binaries in `spring-application-layer/`.
 
-## Current Working Quick Start
+The main native artifacts are:
 
-For the 10-app layered Spring demo on this machine, use this directory:
+- `base-layer/target/base-layer.nil`
+- `base-layer/target/libjavabaselayer.so`
+- `spring-application-layer/target/hello-*`
 
-`/home/opc/demo-central/spring-io-2026/spring-hello-rest-maven-layered-10apps`
+Each native app exposes:
 
-The scripts in this directory are the ones to run:
-- `./build-all-apps.sh` to build the shared base layer plus all 10 native executables
-- `./run.sh` for one selected native app with RSS/PSS reporting
-- `./run-all.sh` for all 10 native apps with RSS/PSS reporting
-- `./scripts/loop-layer-build.sh` for repeated layered build attempts with RSS/PSS reporting
+- `/`
+- `/hello/<language>`
 
-This variant keeps the working layered base from `spring-hello-rest-maven-layered-upstream-exp`, but the application layer now builds 10 distinct binaries:
-- `hello-english`
-- `hello-french`
-- `hello-german`
-- `hello-spanish`
-- `hello-italian`
-- `hello-japanese`
-- `hello-ukrainian`
-- `hello-portuguese`
-- `hello-korean`
-- `hello-swiss`
+Supported languages are `english`, `french`, `german`, `spanish`, `italian`, `japanese`, `ukrainian`, `portuguese`, `korean`, and `swiss`.
 
-Each binary exposes `/` and its own `/hello/<language>` endpoint.
+## Prerequisites
 
-To build all 10 binaries:
+- Linux
+- GraalVM 25.x with Native Image available in `JAVA_HOME`
+- `curl`
+
+Set `JAVA_HOME` before building:
 
 ```bash
-cd /home/opc/demo-central/spring-io-2026/spring-hello-rest-maven-layered-10apps
+export JAVA_HOME=/path/to/graalvm
+./mvnw -version
+"$JAVA_HOME/bin/native-image" --version
+```
+
+`base-layer/pom.xml` reads `native-image-base.jar` from `$JAVA_HOME/lib/svm/builder`, so a standard JDK is not enough.
+
+The helper scripts also read RSS and PSS from `/proc`, so they are intended for Linux hosts.
+
+## Build The Shared Native Base Layer
+
+Build the base layer first if you want the repo to be self-contained:
+
+```bash
+cd base-layer
+../mvnw --no-transfer-progress \
+  -DskipTests -DskipNativeTests \
+  install
+```
+
+This produces:
+
+- `base-layer/target/base-layer.nil`
+- `base-layer/target/libjavabaselayer.so`
+
+`spring-application-layer` uses `base-layer.nil` at build time and `libjavabaselayer.so` at runtime.
+
+## Build One Layered Native App
+
+Example: build the English app.
+
+```bash
+cd spring-application-layer
+../mvnw --no-transfer-progress \
+  -Pnative -Papp-layer -Phello-app \
+  -DskipTests -DskipNativeTests \
+  -Dhello.class=HelloEnglish \
+  -Dhello.image=hello-english \
+  package
+```
+
+This produces:
+
+- `spring-application-layer/target/hello-english`
+- `spring-application-layer/target/libjavabaselayer.so`
+
+## Build All Layered Native Apps
+
+From the repository root:
+
+```bash
 ./build-all-apps.sh
 ```
 
-To build and run one app, defaulting to English:
+This loops through all 10 language variants and writes the binaries into `spring-application-layer/target/`.
+
+## Run One Native App
+
+Run the binary directly:
 
 ```bash
-cd /home/opc/demo-central/spring-io-2026/spring-hello-rest-maven-layered-10apps
+cd spring-application-layer
+./target/hello-english --server.port=8080
+```
+
+In another shell:
+
+```bash
+curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/hello/english
+```
+
+You can also use the helper script from the repository root:
+
+```bash
 ./run.sh
-```
-
-To run another language:
-
-```bash
 APP=japanese ./run.sh
-```
-
-To use another port:
-
-```bash
 APP=swiss PORT=8090 ./run.sh
 ```
 
-To run all 10 apps with live RSS/PSS totals:
+`run.sh` defaults to:
+
+- `APP=english`
+- `BUILD_MODE=if-needed`
+- `MEASURE_MEMORY=1`
+- `MEASURE_INTERVAL=10`
+
+Set `BUILD_MODE=always` to force a rebuild before launch, or `BUILD_MODE=never` to skip building and only run an existing binary.
+
+## Run All Native Apps
+
+From the repository root:
 
 ```bash
 ./run-all.sh
 ```
 
-### Prerequisites
-- Linux x64
-- Latest GraalVM 25.1 EA build (with Native Image support)
+This starts all 10 native binaries on ports `8080` through `8089`, waits for each `/hello/<language>` endpoint to respond, and then prints live RSS/PSS totals while they run.
 
-> Native Image Layers is an experimental feature. For the best experience use the latest [GraalVM Early Access Build](https://github.com/graalvm/oracle-graalvm-ea-builds/releases).
+## Repo Layout
 
-## Environment Setup
-Point your `JAVA_HOME` to the GraalVM distribution.
-```bash
-export JAVA_HOME=/path/to/graalvm/ea/build
-```
+- `base-layer/`: shared native base layer definition and `LayerCreate` configuration
+- `spring-application-layer/`: Spring Boot application binaries built with `LayerUse=../base-layer/target/base-layer.nil`
+- `scripts/`: app name mapping, default ports, and memory-reporting helpers
 
-## Create the Spring Application
+## Notes
 
-Start by generating a basic application using the [online generator](https://start.spring.io/).
-For more details, see the [Spring guide](https://spring.io/guides/gs/spring-boot).
-
-On the web page, choose `Maven` for the `Project`. Then choose `Java` for `Language`.
-
-Then choose any version, and any name for the project.
-
-Finally, use `Jar` for `Packaging`.
-
-This creates a new Spring project with the following structure:
-```
-demo/
-├── pom.xml
-├── src/
-│   ├── main/
-│   │   ├── java/
-│   │   │   └── example/demo/DemoApplication.java
-│   │   └── resources/
-│   │       └── application.properties
-│   └── test/
-└── mvnw (Maven wrapper)
-```
-
-For executing the subsequent commands, enter the project directory:
-```bash
-cd spring-hello-rest-maven-layered
-```
-
-### Add a Custom Controller
-
-Add a custom controller to `src/main/java/com/example/demo/HelloController.java`:
-```java
-package com.example.demo;
-
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-@RestController
-public class HelloController {
-
-	@GetMapping("/")
-	public String index() {
-		return "Greetings from Spring Boot!";
-	}
-
-}
-```
-
-### Standalone Application
-
-First, build a standalone executable for this simple application.
-For this, extend the `pom.xml` with a custom profile and configure the native build using the [GraalVM Native Image Maven plugin](https://graalvm.github.io/native-build-tools/latest/maven-plugin.html):
-```xml
-<profile>
-    <id>standalone</id>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.graalvm.buildtools</groupId>
-                <artifactId>native-maven-plugin</artifactId>
-                <version>${native.maven.plugin.version}</version>
-                <configuration>
-                    <imageName>spring-demo</imageName>
-                    <mainClass>com.example.demo.DemoApplication</mainClass>
-					<buildArgs combine.children="append">
-						<buildArg>--verbose</buildArg>
-					</buildArgs>
-				</configuration>
-			</plugin>
-        </plugins>
-    </build>
-</profile>
-```
-
-Using this profile you can now generate the executable:
-```bash
-cd spring-demo
-../mvnw clean package -Pnative -Pstandalone
-```
-
-This will generate an executable file that you can run:
-```bash
-./target/spring-demo
-
-  .   ____          _            __ _ _
- /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
-( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
- \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
-  '  |____| .__|_| |_|_| |_\__, | / / / /
- =========|_|==============|___/=/_/_/_/
-
- :: Spring Boot ::                (v4.0.2)
-...
-2026-01-29T17:08:02.666+01:00  INFO 160744 --- [demo] [           main] com.example.demo.DemoApplication         : Started DemoApplication in 0.029 seconds (process running for 0.032)
-```
-Test your custom endpoint:
-```bash
-curl localhost:8080
-```
-The expected output is:
-```
-Greetings from Spring Boot!
-```
-
-### Layered Application
-
-#### Configure the Base Layer
-
-Next, create a base layer that contains `java.base`.
-For this, use the following build in the _pom.xml_ file:
-```xml
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.graalvm.buildtools</groupId>
-            <artifactId>native-maven-plugin</artifactId>
-            <version>${native.maven.plugin.version}</version>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>compile-no-fork</goal>
-                    </goals>
-                    <phase>package</phase>
-                </execution>
-            </executions>
-            <configuration>
-                <imageName>libjavabaselayer</imageName>
-                <buildArgs>
-                    <buildArg>-cp ${project.basedir}/base_layer_config</buildArg>
-                </buildArgs>
-            </configuration>
-        </plugin>
-    </plugins>
-</build>
-
-```
-
-with the following _native-image.properties_ file in _base_layer_config/META-INF/native-image/spring-base-layer_:
-```
-Args = -H:+UnlockExperimentalVMOptions \
-       -H:LayerCreate=@layer-create.args \
-       -H:-UnlockExperimentalVMOptions
-```
-
-Create the following _layer-create.args_ file in the same directory:
-```
-# base layer config that contains JDK modules used by Spring
-base-layer.nil
-digest-ignore
-module=java.base
-module=java.desktop
-module=java.net.http
-module=java.management
-module=java.sql
-module=jdk.unsupported
-```
-
-This is an alternate way to use the `-H:LayerCreate=` option. It is used to specify what should be included in the base layer: `java.base` and a few more other packages that a Spring application usually depends on.
-For more details, consult the [Native Image Layers documentation](https://github.com/oracle/graal/blob/master/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/imagelayer/NativeImageLayers.md).
-
-Now you can build the base layer:
-```bash
-../mvnw clean install
-```
-This will create the `base-layer.nil` which is a build time dependency for the application build.
-It will also create the `libjavabaselayer.so` shared library which is a run time dependency for the application layer.
-Note also that you use `install` instead of `package` to ensure that the base layer JAR is installed in the `.m2` cache as it will be needed by the application build later.
-
-### Configure The Application Layer
-
-To configure the application layer, add an additional profile:
-```xml
-<profile>
-    <id>app-layer</id>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.graalvm.buildtools</groupId>
-                <artifactId>native-maven-plugin</artifactId>
-                <version>${native.maven.plugin.version}</version>
-                <configuration>
-                    <imageName>spring-demo-layered</imageName>
-                    <mainClass>com.example.demo.DemoApplication</mainClass>
-                    <buildArgs combine.children="append">
-						<buildArg>--verbose</buildArg>
-                        <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
-                        <buildArg>-H:LayerUse=../base-layer-test/target/base-layer.nil</buildArg>
-                        <buildArg>-H:LinkerRPath=$ORIGIN</buildArg>
-                        <buildArg>-H:-UnlockExperimentalVMOptions</buildArg>
-                    </buildArgs>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-</profile>
-```
-
-Now you can build a layered native image which depends on the base layer that you created earlier:
-```bash
-../mvnw clean package -Dpackaging=native-image -Pnative -Papp-layer
-```
-
-This will generate the layered executable file in _./target/spring-demo-layered_ and will copy `libjavabaselayer.so` next to it.
-
-Then you can execute the layered application:
-```bash
-./target/spring-demo-layered
-
-  .   ____          _            __ _ _
- /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
-( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
- \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
-  '  |____| .__|_| |_|_| |_\__, | / / / /
- =========|_|==============|___/=/_/_/_/
-
- :: Spring Boot ::                (v4.0.2)
-...
-2026-01-29T17:01:12.362+01:00  INFO 158071 --- [demo] [           main] com.example.demo.DemoApplication         : Started DemoApplication in 0.031 seconds (process running for 0.035)
-```
-Test it with:
-```
-curl localhost:8080
-```
-The expected output is:
-```
-Greetings from Spring Boot!
-```
-
-### Learn More
-
-* [Native Image Layers](https://github.com/oracle/graal/blob/master/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/imagelayer/NativeImageLayers.md)
+- The layered native path above is the main workflow for this repository.
+- A `standalone` native profile still exists in `spring-application-layer/pom.xml`, but it is secondary to the layered build flow.
+- Some helper logic can fall back to a machine-specific reference base layer from `scripts/app-config.sh` if `base-layer/target/` is missing. Building `base-layer` locally avoids that dependency.
