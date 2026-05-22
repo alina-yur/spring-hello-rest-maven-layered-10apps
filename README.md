@@ -31,7 +31,7 @@ export JAVA_HOME=/path/to/graalvm
 
 `base-layer/pom.xml` reads `native-image-base.jar` from `$JAVA_HOME/lib/svm/builder`, so a standard JDK is not enough.
 
-The helper scripts also read RSS and PSS from `/proc`, so they are intended for Linux hosts.
+The helper scripts also read RSS, USS, and PSS from `/proc`, so they are intended for Linux hosts.
 
 ## Build The Shared Native Base Layer
 
@@ -121,7 +121,7 @@ From the repository root:
 ./run-all.sh
 ```
 
-This starts all 10 native binaries on ports `8080` through `8089`, waits for each `/hello/<language>` endpoint to respond, and then prints live RSS/PSS totals while they run.
+This starts all 10 native binaries on ports `8080` through `8089`, waits for each `/hello/<language>` endpoint to respond, and then prints live RSS/USS/PSS totals while they run.
 
 ## Repo Layout
 
