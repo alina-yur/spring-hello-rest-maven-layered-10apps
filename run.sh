@@ -16,9 +16,10 @@ IMAGE_NAME="$(image_name_for_app "$APP")"
 DEFAULT_PORT="$(port_for_app "$APP")"
 PORT="${PORT:-$DEFAULT_PORT}"
 BINARY="$ROOT/spring-application-layer/target/$IMAGE_NAME"
+SHARED_BASE_LAYER="$ROOT/spring-application-layer/target/libjavabaselayer.so"
 
 build_app() {
-    echo "==> Reusing reference base layer"
+    echo "==> Ensuring Spring base layer"
     ensure_base_layer_target "$ROOT"
 
     echo
@@ -41,6 +42,8 @@ case "$BUILD_MODE" in
     if-needed)
         if [[ ! -x "$BINARY" ]]; then
             build_app
+        else
+            ensure_app_shared_base_layer "$ROOT"
         fi
         ;;
     never)
@@ -56,16 +59,39 @@ if [[ ! -x "$BINARY" ]]; then
     exit 1
 fi
 
+if [[ ! -f "$SHARED_BASE_LAYER" ]]; then
+    echo "Missing shared base layer: $SHARED_BASE_LAYER" >&2
+    exit 1
+fi
+
 app_pid=""
+CLEANED_UP=0
 
 cleanup() {
+    if [[ "$CLEANED_UP" -eq 1 ]]; then
+        return
+    fi
+    CLEANED_UP=1
+
     if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
         kill "$app_pid" 2>/dev/null || true
         wait "$app_pid" 2>/dev/null || true
     fi
 }
 
-trap cleanup EXIT INT TERM
+handle_int() {
+    cleanup
+    exit 130
+}
+
+handle_term() {
+    cleanup
+    exit 143
+}
+
+trap cleanup EXIT
+trap handle_int INT
+trap handle_term TERM
 
 echo
 echo "==> Starting $IMAGE_NAME on port $PORT"

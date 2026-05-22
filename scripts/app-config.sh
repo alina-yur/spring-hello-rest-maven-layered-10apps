@@ -40,7 +40,6 @@ IMAGE_NAMES=(
 )
 
 PORTS=(8080 8081 8082 8083 8084 8085 8086 8087 8088 8089)
-REFERENCE_BASE_TARGET="/home/opc/demo-central/spring-io-2026/spring-hello-rest-maven-layered-upstream-exp/base-layer/target"
 
 app_index() {
     local app="$1"
@@ -75,6 +74,16 @@ port_for_app() {
     echo "${PORTS[$index]}"
 }
 
+build_base_layer() {
+    local root="$1"
+
+    echo "==> Building Spring base layer"
+    (
+        cd "$root/base-layer"
+        ../mvnw --no-transfer-progress -DskipTests -DskipNativeTests install
+    )
+}
+
 ensure_base_layer_target() {
     local root="$1"
     local local_target="$root/base-layer/target"
@@ -83,11 +92,19 @@ ensure_base_layer_target() {
         return 0
     fi
 
-    if [[ ! -f "$REFERENCE_BASE_TARGET/base-layer.nil" || ! -f "$REFERENCE_BASE_TARGET/libjavabaselayer.so" ]]; then
-        echo "Missing reference base-layer artifacts in $REFERENCE_BASE_TARGET" >&2
-        return 1
+    build_base_layer "$root"
+}
+
+ensure_app_shared_base_layer() {
+    local root="$1"
+    local app_target="$root/spring-application-layer/target"
+    local base_target="$root/base-layer/target"
+
+    if [[ -f "$app_target/libjavabaselayer.so" ]]; then
+        return 0
     fi
 
-    rm -rf "$local_target"
-    ln -s "$REFERENCE_BASE_TARGET" "$local_target"
+    ensure_base_layer_target "$root"
+    mkdir -p "$app_target"
+    cp "$base_target/libjavabaselayer.so" "$app_target/libjavabaselayer.so"
 }

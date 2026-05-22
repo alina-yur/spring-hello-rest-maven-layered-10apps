@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$ROOT/scripts/app-config.sh"
 
-echo "==> Reusing reference base layer"
+echo "==> Ensuring Spring base layer"
 ensure_base_layer_target "$ROOT"
 
 for app in "${LANGUAGES[@]}"; do

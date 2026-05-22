@@ -111,7 +111,7 @@ APP=swiss PORT=8090 ./run.sh
 - `MEASURE_MEMORY=1`
 - `MEASURE_INTERVAL=10`
 
-Set `BUILD_MODE=always` to force a rebuild before launch, or `BUILD_MODE=never` to skip building and only run an existing binary.
+Set `BUILD_MODE=always` to force a rebuild before launch, or `BUILD_MODE=never` to skip building and require existing artifacts.
 
 ## Run All Native Apps
 
@@ -123,6 +123,8 @@ From the repository root:
 
 This starts all 10 native binaries on ports `8080` through `8089`, waits for each `/hello/<language>` endpoint to respond, and then prints live RSS/USS/PSS totals while they run.
 
+`run-all.sh` defaults to `BUILD_MODE=if-needed`, so it builds missing native binaries and restores a missing shared base layer before starting them. Set `BUILD_MODE=always` to force a rebuild, or `BUILD_MODE=never` to require existing artifacts.
+
 ## Repo Layout
 
 - `base-layer/`: shared native base layer definition and `LayerCreate` configuration
@@ -133,4 +135,3 @@ This starts all 10 native binaries on ports `8080` through `8089`, waits for eac
 
 - The layered native path above is the main workflow for this repository.
 - A `standalone` native profile still exists in `spring-application-layer/pom.xml`, but it is secondary to the layered build flow.
-- Some helper logic can fall back to a machine-specific reference base layer from `scripts/app-config.sh` if `base-layer/target/` is missing. Building `base-layer` locally avoids that dependency.

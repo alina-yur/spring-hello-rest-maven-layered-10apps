@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="$ROOT/spring-application-layer/target"
+BUILD_MODE="${BUILD_MODE:-if-needed}"
 MEASURE_INTERVAL="${MEASURE_INTERVAL:-10}"
 
 source "$ROOT/scripts/app-config.sh"
@@ -42,6 +43,25 @@ require_runtime_artifacts() {
     done
 }
 
+build_all_apps() {
+    "$ROOT/build-all-apps.sh"
+}
+
+app_binaries_ready() {
+    if [[ ! -d "$TARGET_DIR" ]]; then
+        return 1
+    fi
+
+    for app in "${LANGUAGES[@]}"; do
+        binary_name="$(image_name_for_app "$app")"
+        if [[ ! -x "$TARGET_DIR/$binary_name" ]]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
 cleanup() {
     if [[ "$CLEANED_UP" -eq 1 ]]; then
         return
@@ -61,7 +81,38 @@ cleanup() {
     done
 }
 
-trap cleanup EXIT INT TERM
+handle_int() {
+    cleanup
+    exit 130
+}
+
+handle_term() {
+    cleanup
+    exit 143
+}
+
+trap cleanup EXIT
+trap handle_int INT
+trap handle_term TERM
+
+case "$BUILD_MODE" in
+    always)
+        build_all_apps
+        ;;
+    if-needed)
+        if ! app_binaries_ready; then
+            build_all_apps
+        else
+            ensure_app_shared_base_layer "$ROOT"
+        fi
+        ;;
+    never)
+        ;;
+    *)
+        echo "Unsupported BUILD_MODE=$BUILD_MODE (use always, if-needed, or never)" >&2
+        exit 1
+        ;;
+esac
 
 require_runtime_artifacts
 
